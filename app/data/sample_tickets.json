@@ -1,0 +1,182 @@
+[
+  {
+    "id": "T-1001",
+    "title": "Unable to log in after password reset",
+    "description": "User reset their password via the email link but still receives 'invalid credentials' when attempting to log in on the web portal.",
+    "category": "Account Access",
+    "priority": "High",
+    "resolution": "Cleared cached session tokens and forced a full logout across devices; had user re-attempt login with the new password after cache invalidation. Advised clearing browser cookies if issue persists.",
+    "tags": ["login", "password", "authentication", "web-portal"]
+  },
+  {
+    "id": "T-1002",
+    "title": "Invoice shows incorrect tax amount",
+    "description": "Customer's latest invoice applied an 18% tax rate instead of the expected 8% based on their billing region.",
+    "category": "Billing",
+    "priority": "Medium",
+    "resolution": "Identified a stale tax-jurisdiction mapping for the customer's region. Updated the billing profile with the correct tax code and issued a corrected invoice with a credit for the overcharge.",
+    "tags": ["invoice", "tax", "billing", "region"]
+  },
+  {
+    "id": "T-1003",
+    "title": "App crashes when uploading large files",
+    "description": "Mobile app crashes consistently when a user attempts to upload files larger than 50MB from the attachments screen.",
+    "category": "Bug Report",
+    "priority": "Critical",
+    "resolution": "Root cause: memory buffer overflow in the chunked upload handler for files above 50MB. Deployed a patch that streams uploads in 5MB chunks instead of loading the full file into memory.",
+    "tags": ["mobile-app", "crash", "upload", "file-size"]
+  },
+  {
+    "id": "T-1004",
+    "title": "Dashboard loads very slowly for large accounts",
+    "description": "Enterprise customers with more than 10,000 records report dashboard load times exceeding 20 seconds.",
+    "category": "Performance",
+    "priority": "High",
+    "resolution": "Added pagination and server-side aggregation to the dashboard query endpoint, plus a Redis cache layer for repeated queries. Load times dropped to under 2 seconds for large accounts.",
+    "tags": ["dashboard", "performance", "enterprise", "latency"]
+  },
+  {
+    "id": "T-1005",
+    "title": "Two-factor authentication codes not arriving",
+    "description": "User does not receive SMS codes for two-factor authentication, blocking account login entirely.",
+    "category": "Account Access",
+    "priority": "Critical",
+    "resolution": "Diagnosed a carrier-level SMS delivery delay. Enabled backup authenticator-app-based 2FA for the user as an immediate workaround and flagged the SMS provider issue to the infra team.",
+    "tags": ["2fa", "sms", "authentication", "login"]
+  },
+  {
+    "id": "T-1006",
+    "title": "Feature request: dark mode for the web app",
+    "description": "Multiple users have requested a dark mode theme option for the web application to reduce eye strain during night usage.",
+    "category": "Feature Request",
+    "priority": "Low",
+    "resolution": "Logged in product backlog as a UI enhancement. Added to the Q3 roadmap pending design review; notified requesting customers of the tentative timeline.",
+    "tags": ["dark-mode", "ui", "feature-request", "web-app"]
+  },
+  {
+    "id": "T-1007",
+    "title": "Suspicious login attempts detected on account",
+    "description": "User received an alert about multiple failed login attempts from an unrecognized IP address in another country.",
+    "category": "Security",
+    "priority": "Critical",
+    "resolution": "Temporarily locked the account, forced a password reset, and enabled mandatory 2FA. Reviewed access logs and confirmed no successful unauthorized login occurred. Advised the user on password hygiene.",
+    "tags": ["security", "suspicious-login", "account-lock", "2fa"]
+  },
+  {
+    "id": "T-1008",
+    "title": "Duplicate charge on credit card",
+    "description": "Customer was billed twice for the same monthly subscription within the same billing cycle.",
+    "category": "Billing",
+    "priority": "High",
+    "resolution": "Confirmed a duplicate transaction caused by a retry bug in the payment gateway webhook handler. Refunded the duplicate charge and deployed an idempotency-key fix to the payment webhook.",
+    "tags": ["billing", "duplicate-charge", "payment", "subscription"]
+  },
+  {
+    "id": "T-1009",
+    "title": "API returns 500 error on bulk export endpoint",
+    "description": "Calling the /export/bulk API endpoint with more than 1000 record IDs consistently returns a 500 Internal Server Error.",
+    "category": "Bug Report",
+    "priority": "High",
+    "resolution": "Found the export handler was hitting a query timeout above 1000 IDs. Refactored to batch the export into groups of 200 with async processing and a job-status polling endpoint.",
+    "tags": ["api", "bulk-export", "500-error", "backend"]
+  },
+  {
+    "id": "T-1010",
+    "title": "Cannot reset password, reset email never arrives",
+    "description": "User requested a password reset multiple times but the reset email never arrives in their inbox or spam folder.",
+    "category": "Account Access",
+    "priority": "Medium",
+    "resolution": "Found the user's email domain was on a greylist at our transactional email provider. Whitelisted the domain and manually triggered a fresh reset email, which the user received successfully.",
+    "tags": ["password-reset", "email-delivery", "authentication"]
+  },
+  {
+    "id": "T-1011",
+    "title": "Slow API response times during peak hours",
+    "description": "Third-party integration partner reports API latency spikes to 3-5 seconds during 9-11am peak traffic windows.",
+    "category": "Performance",
+    "priority": "High",
+    "resolution": "Traced the bottleneck to database connection pool exhaustion during peak load. Increased pool size, added read replicas, and introduced request-level caching for frequently hit endpoints.",
+    "tags": ["api", "latency", "peak-hours", "performance"]
+  },
+  {
+    "id": "T-1012",
+    "title": "Feature request: bulk edit for tags",
+    "description": "Power users want the ability to select multiple tickets and edit their tags in bulk rather than one at a time.",
+    "category": "Feature Request",
+    "priority": "Low",
+    "resolution": "Added to product backlog under 'bulk operations' theme. Prioritized for the next quarterly planning cycle given repeated requests from enterprise accounts.",
+    "tags": ["bulk-edit", "tags", "feature-request", "ui"]
+  },
+  {
+    "id": "T-1013",
+    "title": "Data export missing recent records",
+    "description": "CSV export from the reporting module is missing records created within the last 24 hours.",
+    "category": "Bug Report",
+    "priority": "Medium",
+    "resolution": "Identified a stale materialized view refreshed only once daily. Adjusted the refresh schedule to hourly and added a manual 'refresh now' option for urgent exports.",
+    "tags": ["export", "csv", "reporting", "data-sync"]
+  },
+  {
+    "id": "T-1014",
+    "title": "Account locked after too many failed login attempts",
+    "description": "User's account was automatically locked after 5 failed login attempts and they cannot self-unlock it.",
+    "category": "Account Access",
+    "priority": "Medium",
+    "resolution": "Manually unlocked the account after verifying identity via secondary email. Explained the lockout policy and recommended enabling password manager autofill to avoid future lockouts.",
+    "tags": ["account-lock", "login", "authentication"]
+  },
+  {
+    "id": "T-1015",
+    "title": "Unexpected charge after cancelling subscription",
+    "description": "Customer cancelled their subscription but was still charged for the following billing cycle.",
+    "category": "Billing",
+    "priority": "High",
+    "resolution": "Found the cancellation was submitted after the billing cutoff date for that cycle, per the stated policy. Issued a goodwill refund as a one-time exception and clarified the cutoff policy to the customer.",
+    "tags": ["billing", "cancellation", "subscription", "refund"]
+  },
+  {
+    "id": "T-1016",
+    "title": "Phishing email impersonating support team",
+    "description": "User reported receiving a phishing email that impersonates our support team and asks for account credentials.",
+    "category": "Security",
+    "priority": "Critical",
+    "resolution": "Verified the email as phishing, added the sender domain to the block list, and issued a company-wide alert. Advised the user not to click any links and to report similar emails going forward.",
+    "tags": ["phishing", "security", "email", "impersonation"]
+  },
+  {
+    "id": "T-1017",
+    "title": "General question about enterprise pricing tiers",
+    "description": "Prospective customer is asking for clarification on the differences between the Business and Enterprise pricing tiers.",
+    "category": "General Inquiry",
+    "priority": "Low",
+    "resolution": "Provided a side-by-side feature and pricing comparison document and connected the prospect with the enterprise sales team for a custom quote.",
+    "tags": ["pricing", "sales", "general-inquiry"]
+  },
+  {
+    "id": "T-1018",
+    "title": "Search functionality returns no results for valid queries",
+    "description": "Users report that searching for terms known to exist in their data returns zero results intermittently.",
+    "category": "Bug Report",
+    "priority": "High",
+    "resolution": "Discovered the search index had fallen out of sync with the primary database due to a stalled indexing worker. Restarted the indexing pipeline and added monitoring/alerting for indexer lag.",
+    "tags": ["search", "indexing", "bug", "data-sync"]
+  },
+  {
+    "id": "T-1019",
+    "title": "Mobile app performance degraded after latest update",
+    "description": "Since updating to the latest mobile app version, users report noticeably slower screen transitions and occasional freezes.",
+    "category": "Performance",
+    "priority": "High",
+    "resolution": "Profiling revealed an unoptimized image-decoding routine introduced in the update. Rolled back the offending change and shipped a hotfix with lazy image loading and caching.",
+    "tags": ["mobile-app", "performance", "update", "regression"]
+  },
+  {
+    "id": "T-1020",
+    "title": "Request to export account data for GDPR compliance",
+    "description": "EU-based customer requested a full export of their personal data under GDPR data portability rights.",
+    "category": "General Inquiry",
+    "priority": "Medium",
+    "resolution": "Verified identity per compliance process, generated a full data export via the GDPR tooling, and delivered it securely within the mandated 30-day window.",
+    "tags": ["gdpr", "data-export", "compliance", "privacy"]
+  }
+]
