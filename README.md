@@ -126,30 +126,26 @@ python -c "import fastapi, uvicorn, spacy, nltk, sentence_transformers, faiss, t
 
 ## Running the Project
 
-You have **two options** to run the system:
+### Option A — Web GUI & FastAPI Server (Recommended)
 
-### Option A — FastAPI Web Server (recommended)
-
-Start the API server:
+Start the server:
 
 ```powershell
 uvicorn app.main:app --reload --port 8000
 ```
 
-> On first startup, the server will:
-> 1. Load the Sentence Transformer model (`all-MiniLM-L6-v2`, ~90 MB download)
-> 2. Build the Gensim TF-IDF/LSI topic model from 20 sample tickets
-> 3. Create a FAISS vector index
-> 4. Build a NetworkX knowledge graph
-> 5. Start accepting requests on **http://127.0.0.1:8000**
+Open your browser and navigate to:
 
-#### 📘 Access the Interactive API Docs
+| Interface | URL | Description |
+|-----------|-----|-------------|
+| **Support Team GUI Dashboard** | [http://localhost:8000/](http://localhost:8000/) | Full interactive Web UI for Single Ticket Triage & Batch CSV Processing |
+| **Swagger UI (Interactive API)** | [http://localhost:8000/docs](http://localhost:8000/docs) | Test REST endpoints directly |
+| **ReDoc** | [http://localhost:8000/redoc](http://localhost:8000/redoc) | Detailed OpenAPI documentation |
 
-| Interface | URL |
-|-----------|-----|
-| **Swagger UI** (recommended) | [http://localhost:8000/docs](http://localhost:8000/docs) |
-| **ReDoc** (alternative) | [http://localhost:8000/redoc](http://localhost:8000/redoc) |
-| **OpenAPI JSON** | [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json) |
+#### 🖥️ GUI Features for Support Teams:
+- **Single Ticket Triage**: Enter ticket number, title, and issue details (or use quick-test presets) to get instant category/priority predictions, matching confidence, dominant topics, grounded AI resolution suggestions, top similar historical tickets, and step-by-step reasoning trace.
+- **Batch CSV Processing**: Upload CSV files containing multiple tickets (`ticket_number`, `title`, `issue_details`), process them all in parallel/bulk, view aggregated metrics, filter by category/priority, expand individual triage details, and export all recommendations back to CSV with 1 click.
+- **Knowledge Base Explorer**: Search through all indexed historical tickets and ingest newly resolved tickets directly into the live FAISS vector store and Knowledge Graph.
 
 The Swagger UI lets you test all endpoints directly from the browser with a "Try it out" button.
 

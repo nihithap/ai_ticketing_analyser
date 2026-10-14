@@ -12,6 +12,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router
 from app.config import settings
@@ -62,13 +64,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static files
+app.mount("/static", StaticFiles(directory=str(settings.STATIC_DIR)), name="static")
+
+# Include API routes
 app.include_router(router, prefix="/api/v1", tags=["tickets"])
 
 
-@app.get("/")
-def root():
+@app.get("/", include_in_schema=False)
+def index_page():
+    """Serves the Support Team Triage & Resolution GUI."""
+    index_file = settings.STATIC_DIR / "index.html"
+    return FileResponse(index_file)
+
+
+@app.get("/api")
+def api_info():
     return {
         "service": settings.API_TITLE,
         "version": settings.API_VERSION,
         "docs": "/docs",
+        "health": "/api/v1/health",
     }

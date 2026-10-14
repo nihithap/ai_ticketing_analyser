@@ -5,7 +5,7 @@ pydantic==2.7.4
 # NLP
 spacy==3.7.5
 nltk==3.8.1
-gensim==4.3.2
+gensim>=4.3.2
 
 # Embeddings / Vector Search
 sentence-transformers==3.0.1

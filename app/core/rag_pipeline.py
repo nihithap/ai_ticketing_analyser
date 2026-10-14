@@ -4,7 +4,7 @@ Custom RAG (Retrieval-Augmented Generation) pipeline for ticket triage.
 Flow for an incoming ticket:
   1. Preprocess text (spaCy/NLTK) and compute LSI topic vector (Gensim).
   2. Embed text with Sentence Transformers.
-  3. Retrieve top-k semantically similar historical tickets via FAISS.
+  3. Retrieve top-k semantically similar historical tickets via FAISS (Facebook AI Similarity Search).
   4. Expand context using the NetworkX knowledge graph (category/tag/topic
      neighbors + graph-derived relevance signals).
   5. Classify category & priority via k-NN vote over retrieved neighbors.

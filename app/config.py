@@ -12,6 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 class Settings:
     # --- Paths ---
     DATA_DIR: Path = BASE_DIR / "app" / "data"
+    STATIC_DIR: Path = BASE_DIR / "app" / "static"
     INDEX_DIR: Path = BASE_DIR / "storage"
 
     @property
