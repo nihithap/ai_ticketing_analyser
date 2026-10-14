@@ -9,10 +9,12 @@ from typing import List, Optional
 
 from fastapi import APIRouter, File, HTTPException, Request, Response, UploadFile
 
+from app.config import settings
 from app.models.schemas import (
     BatchProcessResponse,
     BatchTicketResult,
     ClassificationResult,
+    CodeAnalysisResult,
     GraphRelatedResponse,
     IngestResponse,
     RecommendationResponse,
@@ -41,6 +43,15 @@ def health_check(request: Request):
         "status": "ok" if pipeline else "initializing",
         "vector_count": pipeline.vector_store.size() if pipeline else 0,
         "graph_nodes": pipeline.knowledge_graph.node_count() if pipeline else 0,
+        "mapped_apps": list(settings.APP_REPO_MAPPINGS.keys()),
+    }
+
+
+@router.get("/applications")
+def list_applications():
+    """Returns the list of configured applications and their Git repo mappings."""
+    return {
+        "applications": list(settings.APP_REPO_MAPPINGS.values())
     }
 
 
@@ -60,16 +71,27 @@ def recommend_resolution(payload: TicketQueryRequest, request: Request):
     if not title and desc:
         title = desc[:80]
 
-    result = pipeline.generate_recommendation(title, desc)
+    result = pipeline.generate_recommendation(
+        title=title,
+        description=desc,
+        application_name=payload.application_name,
+    )
+
+    code_analysis_obj = (
+        CodeAnalysisResult(**result["code_analysis"]) if result.get("code_analysis") else None
+    )
 
     return RecommendationResponse(
         ticket_number=payload.ticket_number,
+        application_name=result.get("application_name"),
         query_title=title,
         classification=ClassificationResult(**result["classification"]),
         similar_tickets=[SimilarTicket(**t) for t in result["similar_tickets"]],
         graph_related_ticket_ids=result["graph_related_ticket_ids"],
         recommended_resolution=result["recommended_resolution"],
         recommendation_confidence=result["recommendation_confidence"],
+        code_analysis=code_analysis_obj,
+        source_channel=result.get("source_channel", "Historical Ticket RAG"),
         reasoning=result["reasoning"],
     )
 
@@ -77,8 +99,8 @@ def recommend_resolution(payload: TicketQueryRequest, request: Request):
 @router.post("/tickets/batch-csv", response_model=BatchProcessResponse)
 async def process_batch_csv(request: Request, file: UploadFile = File(...)):
     """
-    Accepts an uploaded CSV file with ticket numbers and issue details,
-    processes all tickets through the RAG pipeline, and returns triage
+    Accepts an uploaded CSV file with ticket numbers, application names, and issue details,
+    processes all tickets through the RAG & Git Code Analysis pipeline, and returns triage
     and recommendations for each ticket along with batch statistics.
     """
     pipeline = get_pipeline(request)
@@ -109,8 +131,9 @@ async def process_batch_csv(request: Request, file: UploadFile = File(...)):
         return None
 
     ticket_num_col = find_field(["ticket_number", "ticket_no", "ticket_id", "ticket", "id", "inc_number", "ticket #", "ticket num"])
+    app_col = find_field(["application_name", "application", "app_name", "app", "service", "repo"])
     title_col = find_field(["title", "summary", "subject", "issue_title", "short_description", "header"])
-    desc_col = find_field(["issue_details", "description", "details", "issue", "problem", "notes", "body", "long_description"])
+    desc_col = find_field(["issue_details", "description", "details", "issue", "problem", "notes", "body", "long_description", "stacktrace"])
 
     if not desc_col and not title_col:
         raise HTTPException(
@@ -122,12 +145,14 @@ async def process_batch_csv(request: Request, file: UploadFile = File(...)):
     category_counter = Counter()
     priority_counter = Counter()
     confidences: List[float] = []
+    git_analyses_count = 0
 
     for idx, row in enumerate(csv_reader, start=1):
         ticket_num = (row.get(ticket_num_col) or "").strip() if ticket_num_col else f"T-{idx:04d}"
         if not ticket_num:
             ticket_num = f"T-{idx:04d}"
 
+        app_name = (row.get(app_col) or "").strip() if app_col else None
         title = (row.get(title_col) or "").strip() if title_col else ""
         desc = (row.get(desc_col) or "").strip() if desc_col else ""
 
@@ -139,7 +164,11 @@ async def process_batch_csv(request: Request, file: UploadFile = File(...)):
         if not desc:
             continue  # Skip completely empty rows
 
-        res = pipeline.generate_recommendation(title, desc)
+        res = pipeline.generate_recommendation(
+            title=title,
+            description=desc,
+            application_name=app_name,
+        )
         classification = res["classification"]
         pred_cat = classification["predicted_category"]
         pred_pri = classification["predicted_priority"]
@@ -152,10 +181,16 @@ async def process_batch_csv(request: Request, file: UploadFile = File(...)):
         confidences.append(rec_conf)
 
         top_sim = res["similar_tickets"][0] if res["similar_tickets"] else None
+        code_analysis_data = res.get("code_analysis")
+        if code_analysis_data:
+            git_analyses_count += 1
+
+        code_analysis_obj = CodeAnalysisResult(**code_analysis_data) if code_analysis_data else None
 
         results.append(
             BatchTicketResult(
                 ticket_number=ticket_num,
+                application_name=app_name or (code_analysis_data["application_name"] if code_analysis_data else None),
                 title=title,
                 description=desc,
                 predicted_category=pred_cat,
@@ -168,6 +203,8 @@ async def process_batch_csv(request: Request, file: UploadFile = File(...)):
                 top_similar_ticket_id=top_sim["id"] if top_sim else None,
                 top_similar_ticket_title=top_sim["title"] if top_sim else None,
                 top_similarity_score=top_sim["similarity_score"] if top_sim else None,
+                code_analysis=code_analysis_obj,
+                code_analysis_applied=bool(code_analysis_obj),
                 reasoning=res["reasoning"],
             )
         )
@@ -180,6 +217,7 @@ async def process_batch_csv(request: Request, file: UploadFile = File(...)):
         category_summary=dict(category_counter),
         priority_summary=dict(priority_counter),
         average_confidence=avg_conf,
+        git_code_analyses_count=git_analyses_count,
         results=results,
     )
 
@@ -189,18 +227,43 @@ def download_sample_csv():
     """Generates and returns a downloadable sample CSV template for support teams."""
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["ticket_number", "title", "issue_details"])
-    writer.writerow(["INC-3001", "Cannot connect to company VPN", "User gets Error 691 authentication failure when connecting to the US-East VPN server gateway."])
-    writer.writerow(["INC-3002", "Billing overcharge on annual renewal", "Customer was billed $499 instead of the discounted $399 renewal promo rate on invoice INV-9821."])
-    writer.writerow(["INC-3003", "Mobile app keeps crashing on dashboard load", "iOS app version 4.2.1 crashes immediately upon opening the analytics dashboard tab."])
-    writer.writerow(["INC-3004", "Password reset email not received", "Customer requested password reset link multiple times but email never arrives in inbox or spam."])
-    writer.writerow(["INC-3005", "Database query timeout in reporting module", "Monthly CSV report export times out after 60 seconds with 504 Gateway Error."])
+    writer.writerow(["ticket_number", "application_name", "title", "issue_details"])
+    writer.writerow([
+        "INC-4001",
+        "AuthService",
+        "KeyError: 'user' when validating expired session payload",
+        'File "AuthService/token_handler.py", line 10, in validate_user_session\n    user_id = session_data["user"]["id"]\nKeyError: \'user\'',
+    ])
+    writer.writerow([
+        "INC-4002",
+        "PaymentGateway",
+        "ZeroDivisionError in currency conversion during refund",
+        'File "PaymentGateway/processor.py", line 15, in process_refund\n    converted_amount = refund_amount / rate\nZeroDivisionError: division by zero',
+    ])
+    writer.writerow([
+        "INC-4003",
+        "BillingEngine",
+        "Invoice tax jurisdiction calculation error",
+        "Customer's latest invoice applied an 18% tax rate instead of the expected 8% based on their billing region.",
+    ])
+    writer.writerow([
+        "INC-4004",
+        "AuthService",
+        "IndexError when extracting bearer token header",
+        'File "AuthService/token_handler.py", line 24, in decode_auth_header\n    token = parts[1]\nIndexError: list index out of range',
+    ])
+    writer.writerow([
+        "INC-4005",
+        "MobileAppBackend",
+        "App crashes when uploading files over 50MB",
+        "Mobile app crashes consistently when attempting to upload files larger than 50MB from attachments screen.",
+    ])
 
     csv_data = output.getvalue()
     return Response(
         content=csv_data,
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=sample_support_tickets.csv"},
+        headers={"Content-Disposition": "attachment; filename=sample_support_tickets_with_git.csv"},
     )
 
 

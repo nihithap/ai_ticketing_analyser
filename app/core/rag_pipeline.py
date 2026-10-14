@@ -4,14 +4,14 @@ Custom RAG (Retrieval-Augmented Generation) pipeline for ticket triage.
 Flow for an incoming ticket:
   1. Preprocess text (spaCy/NLTK) and compute LSI topic vector (Gensim).
   2. Embed text with Sentence Transformers.
-  3. Retrieve top-k semantically similar historical tickets via FAISS (Facebook AI Similarity Search).
+  3. Retrieve top-k semantically similar historical tickets via FAISS.
   4. Expand context using the NetworkX knowledge graph (category/tag/topic
      neighbors + graph-derived relevance signals).
   5. Classify category & priority via k-NN vote over retrieved neighbors.
-  6. Generate a grounded recommendation by synthesizing the retrieved
-     resolutions ("generation" here is extractive/template-based so the
-     system runs fully offline; see `generate_with_llm` for how to swap in
-     a call to the Anthropic API for abstractive generation).
+  6. If no strong match in ticket history (or if runtime stacktrace exists),
+     connect to the application's Git repository and analyze the source code.
+  7. Generate a grounded recommendation by synthesizing the retrieved
+     resolutions or code-level bugfix patch.
 """
 import logging
 import uuid
@@ -19,6 +19,7 @@ from collections import Counter
 from typing import Dict, List, Optional, Tuple
 
 from app.config import settings
+from app.core.code_analyzer import GitCodeAnalyzer
 from app.core.embeddings import EmbeddingModel
 from app.core.knowledge_graph import TicketKnowledgeGraph
 from app.core.preprocessing import TextPreprocessor, TopicModeler
@@ -34,6 +35,7 @@ class TicketRAGPipeline:
         self.embedder = EmbeddingModel()
         self.vector_store = FAISSVectorStore(dim=self.embedder.dim)
         self.knowledge_graph = TicketKnowledgeGraph()
+        self.code_analyzer = GitCodeAnalyzer()
         self._corpus_tokens_cache: List[List[str]] = []
 
     # -----------------------------------------------------------------
@@ -73,6 +75,7 @@ class TicketRAGPipeline:
         embedding = self.embedder.encode_single(full_text)
         metadata = {
             "id": ticket_id,
+            "application_name": ticket.get("application_name"),
             "title": ticket["title"],
             "description": ticket["description"],
             "category": ticket.get("category"),
@@ -132,7 +135,7 @@ class TicketRAGPipeline:
 
         if not retrieved:
             return {
-                "predicted_category": "General Inquiry",
+                "predicted_category": "Technical Issue",
                 "predicted_priority": "Medium",
                 "category_confidence": 0.0,
                 "priority_confidence": 0.0,
@@ -149,7 +152,7 @@ class TicketRAGPipeline:
         total_cat_weight = sum(category_votes.values()) or 1.0
         total_pri_weight = sum(priority_votes.values()) or 1.0
 
-        top_category, cat_weight = (category_votes.most_common(1) or [("General Inquiry", 0)])[0]
+        top_category, cat_weight = (category_votes.most_common(1) or [("Technical Issue", 0)])[0]
         top_priority, pri_weight = (priority_votes.most_common(1) or [("Medium", 0)])[0]
 
         return {
@@ -174,37 +177,97 @@ class TicketRAGPipeline:
         return related_ids[:5]
 
     # -----------------------------------------------------------------
-    # Recommendation generation (extractive/template synthesis)
+    # Recommendation generation (with Git Codebase fallback)
     # -----------------------------------------------------------------
-    def generate_recommendation(self, title: str, description: str) -> Dict:
+    def generate_recommendation(
+        self,
+        title: str,
+        description: str,
+        application_name: Optional[str] = None,
+    ) -> Dict:
         retrieved = self.retrieve_similar(title, description)
         classification = self.classify(title, description, retrieved)
         graph_related = self.expand_context_via_graph(retrieved)
 
         reasoning = []
-        if retrieved:
+        top_similarity = retrieved[0][1] if retrieved else 0.0
+
+        if retrieved and top_similarity >= settings.SIMILARITY_THRESHOLD:
             reasoning.append(
                 f"Retrieved {len(retrieved)} semantically similar historical tickets "
-                f"(top similarity: {retrieved[0][1]:.2f})."
+                f"(top similarity: {top_similarity:.2f})."
             )
         else:
-            reasoning.append("No sufficiently similar historical tickets found in the vector store.")
+            reasoning.append(
+                f"No high-similarity ticket found in historical index (top score: {top_similarity:.2f} < {settings.SIMILARITY_THRESHOLD})."
+            )
 
         if graph_related:
             reasoning.append(
-                f"Knowledge graph expanded context with {len(graph_related)} additional "
-                f"related tickets via category/tag/topic links."
+                f"Knowledge graph expanded context with {len(graph_related)} additional related tickets."
             )
 
         if classification["dominant_topics"]:
             reasoning.append(f"Dominant LSI topics detected: {', '.join(classification['dominant_topics'])}.")
 
-        recommendation, confidence = self._synthesize_resolution(retrieved)
-        reasoning.append(
-            f"Synthesized recommendation from {min(len(retrieved), 3)} highest-similarity resolutions."
+        # Check if historical resolution is available
+        strong_matches = [(m, s) for m, s in retrieved if s >= settings.SIMILARITY_THRESHOLD and m.get("resolution")]
+
+        code_analysis_res = None
+        source_channel = "Historical Ticket RAG"
+
+        # Check for stacktrace or fallback to Git Code Analysis when ticket history is insufficient
+        has_stacktrace = bool(
+            "Traceback" in description
+            or "line " in description
+            or "Exception" in description
+            or "Error:" in description
+            or "at " in description
         )
 
+        if (not strong_matches or has_stacktrace):
+            logger.info("Attempting Git codebase & stacktrace inspection...")
+            code_analysis_res = self.code_analyzer.analyze_ticket_code(
+                application_name=application_name,
+                title=title,
+                description=description,
+            )
+
+        if code_analysis_res:
+            source_channel = f"Git Codebase Analysis ({code_analysis_res['application_name']})"
+            reasoning.append(
+                f"Connected to Git repo for '{code_analysis_res['application_name']}' "
+                f"({code_analysis_res.get('repo_url')})."
+            )
+            reasoning.append(
+                f"Parsed runtime stacktrace: {code_analysis_res['error_type']} at "
+                f"{code_analysis_res['file_path']}:{code_analysis_res['line_number']}."
+            )
+            reasoning.append("Analyzed source code AST and synthesized code-level patch.")
+
+            # Formulate code-level recommendation
+            recommendation = (
+                f"⚠️ [Git Code Analysis - {code_analysis_res['application_name']}]\n"
+                f"File: {code_analysis_res['file_path']}:{code_analysis_res['line_number']} (Function: {code_analysis_res['function_name']})\n\n"
+                f"📌 Root Cause:\n{code_analysis_res['root_cause']}\n\n"
+                f"🛠️ Suggested Code Fix:\n{code_analysis_res['suggested_fix']}"
+            )
+            confidence = 0.94
+
+            # Refine classification if ticket history was weak
+            if not strong_matches:
+                classification["predicted_category"] = "Bug Report"
+                classification["predicted_priority"] = "High" if "Error" in code_analysis_res["error_type"] else "Medium"
+                classification["category_confidence"] = 0.95
+                classification["priority_confidence"] = 0.90
+        else:
+            recommendation, confidence = self._synthesize_resolution(retrieved)
+            reasoning.append(
+                f"Synthesized recommendation from {min(len(retrieved), 3)} highest-similarity resolutions."
+            )
+
         return {
+            "application_name": application_name or (code_analysis_res["application_name"] if code_analysis_res else None),
             "classification": classification,
             "similar_tickets": [
                 {**meta, "similarity_score": round(score, 4)} for meta, score in retrieved
@@ -212,6 +275,8 @@ class TicketRAGPipeline:
             "graph_related_ticket_ids": [r["id"] for r in graph_related],
             "recommended_resolution": recommendation,
             "recommendation_confidence": confidence,
+            "code_analysis": code_analysis_res,
+            "source_channel": source_channel,
             "reasoning": reasoning,
         }
 
@@ -219,15 +284,13 @@ class TicketRAGPipeline:
         """
         Extractive synthesis: takes resolutions from the highest-similarity
         matches above threshold and combines them into a single recommendation.
-        This is the 'G' in RAG done without an external LLM call so the
-        service has zero external dependencies at inference time.
         """
         strong_matches = [(m, s) for m, s in retrieved if s >= settings.SIMILARITY_THRESHOLD and m.get("resolution")]
 
         if not strong_matches:
             return (
-                "No high-confidence historical match found. Recommend routing to a human "
-                "agent for manual triage; consider tagging as a novel issue category.",
+                "No high-confidence historical match found in the vector database and no runtime stacktrace "
+                "detected. Recommend routing to support engineers for manual triage.",
                 0.0,
             )
 
@@ -246,27 +309,3 @@ class TicketRAGPipeline:
             + "\n".join(lines)
         )
         return combined, round(avg_conf, 4)
-
-    # -----------------------------------------------------------------
-    # Optional: abstractive generation via the Anthropic API
-    # -----------------------------------------------------------------
-    def generate_with_llm_prompt(self, title: str, description: str, retrieved: List[Tuple[Dict, float]]) -> str:
-        """
-        Builds a grounded prompt suitable for passing to an LLM (e.g. the
-        Anthropic Messages API) for abstractive recommendation generation.
-        Returning the prompt string (rather than calling out) keeps this
-        module dependency-free; wire it up to your model client of choice.
-        """
-        context_blocks = "\n\n".join(
-            f"Historical Ticket: {m['title']}\nResolution: {m.get('resolution', 'N/A')}\nSimilarity: {s:.2f}"
-            for m, s in retrieved
-        )
-        prompt = (
-            "You are a support engineer assistant. Given a new ticket and similar "
-            "historical tickets with their resolutions, recommend a concise, actionable "
-            "resolution grounded ONLY in the provided context.\n\n"
-            f"New Ticket:\nTitle: {title}\nDescription: {description}\n\n"
-            f"Historical Context:\n{context_blocks}\n\n"
-            "Recommended Resolution:"
-        )
-        return prompt

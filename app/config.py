@@ -5,6 +5,7 @@ touching business logic.
 """
 import os
 from pathlib import Path
+from typing import Dict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -14,6 +15,7 @@ class Settings:
     DATA_DIR: Path = BASE_DIR / "app" / "data"
     STATIC_DIR: Path = BASE_DIR / "app" / "static"
     INDEX_DIR: Path = BASE_DIR / "storage"
+    REPOS_DIR: Path = BASE_DIR / "sample_repos"
 
     @property
     def SAMPLE_TICKETS_PATH(self) -> Path:
@@ -33,8 +35,8 @@ class Settings:
     def KG_STORAGE_PATH(self) -> Path:
         self.INDEX_DIR.mkdir(exist_ok=True)
         return self.INDEX_DIR / "knowledge_graph.gpickle"
+
     # --- Embedding model ---
-    # 'all-MiniLM-L6-v2' is fast (384-dim) and strong for semantic similarity.
     EMBEDDING_MODEL_NAME: str = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
     EMBEDDING_DIM: int = 384
 
@@ -63,9 +65,49 @@ class Settings:
     ]
     PRIORITIES = ["Low", "Medium", "High", "Critical"]
 
+    # --- Git Repository & Applications Registry ---
+    # Maps application names to their respective codebase directories and Git repos
+    APP_REPO_MAPPINGS: Dict[str, dict] = {
+        "AuthService": {
+            "name": "AuthService",
+            "repo_url": "https://github.com/org/auth-service.git",
+            "local_path": "AuthService",
+            "description": "User authentication, JWT token generation, OAuth2, and session management.",
+            "language": "Python",
+        },
+        "PaymentGateway": {
+            "name": "PaymentGateway",
+            "repo_url": "https://github.com/org/payment-gateway.git",
+            "local_path": "PaymentGateway",
+            "description": "Payment processor integration, currency conversions, refunds, and webhook listeners.",
+            "language": "Python",
+        },
+        "BillingEngine": {
+            "name": "BillingEngine",
+            "repo_url": "https://github.com/org/billing-engine.git",
+            "local_path": "BillingEngine",
+            "description": "Invoice generation, subscription renewal calculations, and tax jurisdiction rules.",
+            "language": "Python",
+        },
+        "OrderProcessing": {
+            "name": "OrderProcessing",
+            "repo_url": "https://github.com/org/order-processing.git",
+            "local_path": "OrderProcessing",
+            "description": "Order fulfillment, inventory reservations, checkout pipelines, and catalog integration.",
+            "language": "Python",
+        },
+        "MobileAppBackend": {
+            "name": "MobileAppBackend",
+            "repo_url": "https://github.com/org/mobile-backend.git",
+            "local_path": "MobileAppBackend",
+            "description": "Mobile REST/GraphQL API gateway, push notifications, and device telemetry.",
+            "language": "Python",
+        },
+    }
+
     # --- API ---
     API_TITLE = "Intelligent Ticket Triage & Recommendation System"
-    API_VERSION = "1.0.0"
+    API_VERSION = "1.1.0"
 
 
 settings = Settings()

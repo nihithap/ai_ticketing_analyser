@@ -44,12 +44,14 @@ resolutions grounded in historical ticket data.
    similarity links) that pure vector search might miss.
 5. **Classify** — a similarity-weighted k-NN vote over retrieved neighbors'
    category/priority labels.
-6. **Generate** (`app/core/rag_pipeline.py::_synthesize_resolution`) —
-   synthesize a grounded recommendation from the retrieved resolutions.
-   This is extractive/template-based by default (zero external
-   dependencies at inference time); `generate_with_llm_prompt(...)` builds
-   a ready-to-send prompt if you want to swap in an LLM call (e.g. the
-   Anthropic Messages API) for abstractive generation.
+6. **Git Codebase & Stacktrace Inspection** (`app/core/code_analyzer.py`) —
+   If no sufficiently similar historical resolution is found (or if a runtime
+   stacktrace is detected in the ticket details), the pipeline maps the
+   provided `application_name` to its connected Git repository, parses the
+   stacktrace frames, locates the exact source code file & line, performs
+   root-cause AST analysis, and generates a concrete code patch.
+7. **Generate Recommendation** — synthesizes either the historical resolution
+   path or the code-level bugfix patch and root cause diagnosis.
 
 ## Project layout
 
@@ -246,6 +248,117 @@ Returns the nearest historical neighbors for an existing ticket by ID.
 ### `GET /api/v1/knowledge-graph/related/{ticket_id}`
 Returns graph-neighborhood related tickets and a degree-centrality score
 for the given ticket ID.
+
+### `GET /api/v1/applications`
+Returns all registered applications and their configured Git repository mappings.
+
+---
+
+## Git Repository & Application Mapping
+
+When an incoming ticket does not have a high-confidence match in historical ticket data, or when a runtime stacktrace is present in the ticket description, the system connects to the application's Git repository and analyzes the source code directly.
+
+### 1. How Application Names and Git Repositories are Mapped
+
+Application mappings are defined in [`app/config.py`](app/config.py) in the `APP_REPO_MAPPINGS` dictionary:
+
+```python
+APP_REPO_MAPPINGS: Dict[str, dict] = {
+    "AuthService": {
+        "name": "AuthService",
+        "repo_url": "https://github.com/org/auth-service.git",
+        "local_path": "AuthService",            # Subfolder inside sample_repos/
+        "description": "User authentication, JWT token generation, OAuth2, and session management.",
+        "language": "Python",
+    },
+    "PaymentGateway": {
+        "name": "PaymentGateway",
+        "repo_url": "https://github.com/org/payment-gateway.git",
+        "local_path": "PaymentGateway",
+        "description": "Payment processor integration, currency conversions, refunds, and webhook listeners.",
+        "language": "Python",
+    },
+    "BillingEngine": {
+        "name": "BillingEngine",
+        "repo_url": "https://github.com/org/billing-engine.git",
+        "local_path": "BillingEngine",
+        "description": "Invoice generation, subscription renewal calculations, and tax jurisdiction rules.",
+        "language": "Python",
+    },
+}
+```
+
+### 2. How the Code Resolution Works
+
+```
+┌─────────────────────────────────┐
+│ Support Ticket with Stacktrace  │  e.g. File "AuthService/token_handler.py", line 10
+└────────────────┬────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────┐
+│ 1. Application Name Resolution  │  (app/core/code_analyzer.py)
+└────────────────┬────────────────┘
+                 ├─ Exact / Case-insensitive match from UI / CSV / API payload
+                 └─ If blank: Auto-infers from text (e.g. "AuthService" in stacktrace)
+                 │
+                 ▼
+┌─────────────────────────────────┐
+│ 2. Repository & File Locator    │  (app/core/code_analyzer.py)
+└────────────────┬────────────────┘
+                 ├─ Resolves folder in sample_repos/<local_path>/
+                 ├─ Matches source filename (e.g. token_handler.py)
+                 └─ Extracts surrounding code context around offending line
+                 │
+                 ▼
+┌─────────────────────────────────┐
+│ 3. AST & Root Cause Diagnosis   │  (app/core/code_analyzer.py)
+└────────────────┬────────────────┘
+                 ├─ Identifies KeyError, ZeroDivisionError, IndexError, TypeError, etc.
+                 └─ Synthesizes root-cause explanation + recommended code patch diff
+```
+
+### 3. Step-by-Step: Adding a New Git Repository
+
+#### Step 1: Register the new application in `app/config.py`
+Add your new service under `APP_REPO_MAPPINGS`:
+
+```python
+"NotificationService": {
+    "name": "NotificationService",
+    "repo_url": "https://github.com/your-org/notification-service.git",
+    "local_path": "NotificationService",   # folder name inside sample_repos/
+    "description": "Email, SMS, and Push notification delivery engine.",
+    "language": "Python",
+},
+```
+
+#### Step 2: Add or Clone the Repository into `sample_repos/`
+Create the application directory under `sample_repos/` and add/clone your source code:
+
+```
+sample_repos/
+├── AuthService/
+├── PaymentGateway/
+├── BillingEngine/
+└── NotificationService/             <-- Your new repository folder
+    └── email_sender.py
+```
+
+#### Step 3: (Optional) Add to the GUI Dropdown in `app/static/index.html`
+In [`app/static/index.html`](app/static/index.html), add an `<option>` to the application select dropdown:
+
+```html
+<select id="application-name" class="form-select">
+  <option value="AuthService">AuthService (Authentication & Sessions)</option>
+  <option value="PaymentGateway">PaymentGateway (Payments & Refunds)</option>
+  <option value="NotificationService">NotificationService (Email & SMS)</option>
+</select>
+```
+
+> **Note:** Even without editing the HTML dropdown, the system's **Auto-Detect** feature will automatically recognize `NotificationService` whenever it appears in a stacktrace or CSV upload.
+
+---
 
 ## Design notes
 

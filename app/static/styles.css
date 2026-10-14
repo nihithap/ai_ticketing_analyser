@@ -8,21 +8,21 @@
 :root {
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', Consolas, Monaco, monospace;
-
+  
   --bg-app: #f4f6f9;
   --bg-card: #ffffff;
   --bg-subtle: #f8fafc;
   --border-color: #e2e8f0;
   --border-focus: #3b82f6;
-
+  
   --text-main: #0f172a;
   --text-muted: #64748b;
   --text-light: #94a3b8;
-
+  
   --primary: #2563eb;
   --primary-hover: #1d4ed8;
   --primary-light: #eff6ff;
-
+  
   --success: #10b981;
   --success-bg: #ecfdf5;
   --warning: #f59e0b;
@@ -31,11 +31,13 @@
   --danger-bg: #fef2f2;
   --info: #0284c7;
   --info-bg: #f0f9ff;
-
+  --purple: #7c3aed;
+  --purple-bg: #f5f3ff;
+  
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-
+  
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
@@ -315,7 +317,9 @@ label {
 
 .form-textarea {
   resize: vertical;
-  min-height: 110px;
+  min-height: 120px;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
 }
 
 .form-input:focus, .form-textarea:focus, .form-select:focus {
@@ -438,6 +442,13 @@ label {
   margin-bottom: 18px;
 }
 
+.result-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
 .ticket-tag {
   display: inline-block;
   font-family: var(--font-mono);
@@ -447,7 +458,35 @@ label {
   color: #334155;
   padding: 3px 8px;
   border-radius: 4px;
-  margin-bottom: 6px;
+}
+
+.app-tag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--purple-bg);
+  color: var(--purple);
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  margin-left: 6px;
+}
+
+.channel-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.channel-badge.git {
+  background: #fdf2f8;
+  color: #be185d;
+  border-color: #fbcfe8;
 }
 
 .result-title {
@@ -549,6 +588,140 @@ label {
   font-family: var(--font-mono);
   padding: 2px 8px;
   border-radius: 4px;
+}
+
+/* ======================================================== */
+/* GIT CODE ANALYSIS & STACKTRACE BOX */
+/* ======================================================== */
+.git-analysis-box {
+  background: #0f172a;
+  color: #f8fafc;
+  border: 1px solid #334155;
+  border-radius: var(--radius-md);
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.25);
+}
+
+.git-box-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #334155;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+}
+
+.git-box-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.git-box-title h3 {
+  font-size: 1.05rem;
+  color: #38bdf8;
+  font-weight: 700;
+}
+
+.git-icon {
+  font-size: 1.25rem;
+}
+
+.git-repo-pill {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  background: #1e293b;
+  color: #94a3b8;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  border: 1px solid #475569;
+}
+
+.git-meta-bar {
+  display: flex;
+  gap: 20px;
+  font-size: 0.85rem;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.git-meta-item span {
+  color: #94a3b8;
+  margin-right: 6px;
+}
+
+.git-meta-item code {
+  font-family: var(--font-mono);
+  background: #1e293b;
+  color: #facc15;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.825rem;
+}
+
+.error-badge {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.git-root-cause {
+  background: #1e293b;
+  border-left: 3px solid #38bdf8;
+  padding: 12px 14px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  margin-bottom: 16px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.git-root-cause strong {
+  color: #38bdf8;
+  display: block;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+}
+
+.git-code-wrapper, .git-patch-wrapper {
+  margin-bottom: 14px;
+  background: #090d16;
+  border-radius: var(--radius-sm);
+  border: 1px solid #1e293b;
+  overflow: hidden;
+}
+
+.code-header {
+  background: #1e293b;
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.code-block, .patch-block {
+  padding: 12px 14px;
+  font-family: var(--font-mono);
+  font-size: 0.815rem;
+  line-height: 1.55;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.code-block {
+  color: #e2e8f0;
+}
+
+.patch-block {
+  color: #86efac;
 }
 
 /* Recommendation Card */
@@ -859,13 +1032,12 @@ label {
   color: var(--primary);
 }
 
-.metric-value.danger {
-  color: var(--danger);
+.metric-value.code-accent {
+  color: var(--purple);
 }
 
-.metric-value.small {
-  font-size: 1.15rem;
-  line-height: 1.2;
+.metric-value.danger {
+  color: var(--danger);
 }
 
 /* Table Toolbar */
@@ -888,7 +1060,7 @@ label {
 }
 
 .form-select {
-  max-width: 180px;
+  max-width: 220px;
 }
 
 /* Data Table */
@@ -934,6 +1106,16 @@ label {
   color: #1e40af;
 }
 
+.table-app-badge {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--purple-bg);
+  color: var(--purple);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
 .table-summary {
   font-weight: 600;
   color: var(--text-main);
@@ -959,7 +1141,64 @@ label {
   line-height: 1.4;
 }
 
-/* TAB 3: Knowledge Base */
+/* TAB 3: Git Repositories */
+.repo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.repo-card {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 18px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.repo-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  background: #ffffff;
+}
+
+.repo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.repo-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.repo-lang {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #e2e8f0;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.repo-url {
+  font-family: var(--font-mono);
+  font-size: 0.775rem;
+  color: var(--primary);
+  margin-bottom: 8px;
+  word-break: break-all;
+}
+
+.repo-desc {
+  font-size: 0.825rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+/* TAB 4: Knowledge Base */
 .panel-header-row {
   display: flex;
   justify-content: space-between;
@@ -1047,7 +1286,7 @@ label {
 .modal-dialog {
   background: #ffffff;
   border-radius: var(--radius-lg);
-  max-width: 680px;
+  max-width: 720px;
   width: 90%;
   max-height: 85vh;
   overflow-y: auto;
